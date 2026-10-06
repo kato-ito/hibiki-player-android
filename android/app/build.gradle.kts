@@ -19,8 +19,8 @@ android {
         applicationId = "com.zai.hibikiplayer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 16
-        versionName = "2.30.0"
+        versionCode = 17
+        versionName = "2.30.1"
         // 只打包手机用得到的架构（x86/x86_64 仅模拟器需要，排除以缩小安装包）
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")

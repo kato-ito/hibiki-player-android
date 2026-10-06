@@ -45,18 +45,18 @@ Hibiki Player Android/
 
 仓库只提供源码，安装包通过以下两种方式获取：
 
-1. **直接下载**：到本仓库 Releases 页下载 `Hibiki Player v2.30.0*.apk`（功能完全相同，按机型选一个即可）；
+1. **直接下载**：到本仓库 Releases 页下载 `Hibiki Player v2.30.1*.apk`（功能完全相同，按机型选一个即可）；
 2. **自行构建**：见下方「方式 B：构建 APK」。
 
 | 文件 | 大小 | 适用 |
 | --- | --- | --- |
-| `Hibiki Player v2.30.0.apk` | 26.9 MB | **通用包**（arm64-v8a + armeabi-v7a），推荐 |
-| `Hibiki Player v2.30.0 arm64.apk` | 13.5 MB | 仅 64 位机型（2017 年后基本都支持） |
-| `Hibiki Player v2.30.0 armeabi-v7a.apk` | 14.2 MB | 仅 32 位老机型 |
+| `Hibiki Player v2.30.1.apk` | 26.9 MB | **通用包**（arm64-v8a + armeabi-v7a），推荐 |
+| `Hibiki Player v2.30.1 arm64.apk` | 13.5 MB | 仅 64 位机型（2017 年后基本都支持） |
+| `Hibiki Player v2.30.1 armeabi-v7a.apk` | 14.2 MB | 仅 32 位老机型 |
 
 | 项目 | 值 |
 | --- | --- |
-| 包名 / 版本 | `com.zai.hibikiplayer` / 2.30.0 |
+| 包名 / 版本 | `com.zai.hibikiplayer` / 2.30.1 |
 | 支持系统 | Android 7.0 及以上（minSdk 24，targetSdk 35） |
 | 签名 | **v2 + v3** 方案（见「八、安装包与签名」） |
 | 权限 | 仅 2 项：网络（本地回环，播放本地文件用）、麦克风（可视化用，可选）；**不需要存储权限** |
@@ -191,7 +191,7 @@ covr 封面 + 中文标签** + 可解码为 PCM，6/6 通过。
 
 Windows 安装包已重新打包（`electron-builder --win nsis`）并核验新包内含上述改动：
 
-- `Hibiki Player Setup 2.15.0.exe`（93.3 MB，NSIS 安装包，SHA-256 `B0AD78FA…84238768`）
+- `Hibiki Player Setup 2.15.1.exe`（93.3 MB，NSIS 安装包，SHA-256 `1587E92E…BFB2632B7`）
 - `win-unpacked/`（免安装目录版）
 
 > 本仓库只包含安卓版源码；桌面版源码与安装包见 [hibiki-player](https://github.com/kato-ito/hibiki-player) 仓库。
@@ -311,7 +311,26 @@ Windows 安装包已重新打包（`electron-builder --win nsis`）并核验新�
 
 ## 七、版本
 
-- Hibiki Player（安卓版）v2.30.0 · 与桌面版同名同号
+- Hibiki Player（安卓版）v2.30.1 · 与桌面版同名同号
+- v2.30.1（本轮修复）：
+  ① **杜比 / DTS 大文件解码后缓存不再被自己删掉**：解码出的 PCM 体积很大，缓存超出预算时按最近最少使用
+  淘汰，而「刚解码完成的那一条」正是最新的写入者，旧逻辑会把它当普通条目删掉 —— 表现为解码成功却放不出声、
+  或反复重新解码。现在 `DolbyDecoder.trimCache(protectedKey)` 在淘汰循环里显式跳过**刚解码完成 / 正在播放
+  的那一条**（保底：绝不让当前这个文件被自己删掉），1.5 GB 预算的正常回收照旧；
+  ② **坏文件不再「不提示、也不跳下一首」**：`beginPlayback` 原来在 `stopPlayback` **之前**取播放代数号
+  （token），而 `stopPlayback` 内部就会递增它，于是 error 回调里的 `token !== startToken` 永远成立 ——
+  文件不可读 / 编码不受支持时既不弹提示也不自动跳下一首（回调成了死代码）。现在代数号在 stop 之后取，
+  回调正常生效：提示「⚠️ 无法播放（文件不可读或编码不受支持）：曲名」，把该曲记为不可用并自动跳下一首；
+  ③ **关闭面板后返回键不再被"幽灵条目"吞掉**：由界面按钮（而不是系统返回键）关闭面板时，旧逻辑只弹出 JS
+  栈、没有回收对应的浏览器历史条目，返回键会先被这些空条目吃掉，要连按很多次、看着像没反应才能退出应用。
+  现在关闭界面统一走 `uiPopIfTop()`：同步 `history.back()` 回收条目，并用 `uiBackPending` 记账 ——
+  自己触发的回退不会被误当成用户按了返回键，也不会把页面整个导航走（WebView 里的白屏 / 退出）；
+  ④ **扩展名 / 歌词文件判断的正则补上转义**：`extOf()` 与 `.lrc` 识别用的正则漏写了 `\.` 的反斜杠，
+  变成「任意字符 + lrc」匹配，`我的歌lrc`、`A-lrc` 之类会被误判成歌词文件。现已改为 `/\.([^.]+)$/`
+  与 `/\.lrc$/i`（桌面端同一实现本来就是转义正确的）；
+  ⑤ **B 站下载任务卡新增「清除记录」**：任务卡上方新增按钮，已结束（完成 / 失败 / 取消）的任务可一键清空，
+  不必重开页面；原生侧 `BiliDownloader.clearFinished()` 同步清掉完成记录，进程重启后也不会把清掉的
+  卡片带回来（只清记录，已经下载到音乐库的文件不受影响）。
 - v2.30.0（新功能）：
   ① **「资料库 → 歌曲」支持长按多选删除**：长按任意歌曲行进入多选（行上出现勾选圈、底部弹出操作条），
   点击其它行继续勾选，可「全选 / 取消全选」，再点「删除选中」一次移除多首；
@@ -488,9 +507,9 @@ Windows 安装包已重新打包（`electron-builder --win nsis`）并核验新�
 
 ## 八、安装包与签名
 
-- 安装包（Releases 页）：`Hibiki Player v2.30.0.apk`（release、v2 + v3 签名，SHA-256 `2210A59A…46428DCE`）
-  - `Hibiki Player v2.30.0 arm64.apk` SHA-256 `3C2406B47A81225234A11C7C6131293BCC5454C13543919C9B2CB46750CD9B0C`
-  - `Hibiki Player v2.30.0 armeabi-v7a.apk` SHA-256 `63AA8F31124BF995154F1570EA40F47793B0FDB7431B9402F16151CDADA3D28B`
+- 安装包（Releases 页）：`Hibiki Player v2.30.1.apk`（release、v2 + v3 签名，SHA-256 `DE89AE19…0F2555A0`）
+  - `Hibiki Player v2.30.1 arm64.apk` SHA-256 `315A38B9B18A3FC0430BAB8E182916EF7B72A9CCA22B84BD9AAD37A5D89DE5E0`
+  - `Hibiki Player v2.30.1 armeabi-v7a.apk` SHA-256 `8F74BF5CD7B48B96206C1E6BF3857E70F216D0B4C5D5A34428BB7E09DDC6C4E0`
 - 构建时单元测试：`gradle :app:testDebugUnitTest`（命名 / 标签规则 10 项，纯 JVM，不需要设备）
 - 签名密钥库：`android/hibiki-release.jks`（别名 `hibiki`，口令写在 `android/keystore.properties`）
   —— **这两个文件不入库**（已在 `.gitignore` 中排除），只保留在开发者本机，请务必另行备份；
