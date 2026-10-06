@@ -1,0 +1,27 @@
+# 构建产物
+dist/
+android/build/
+android/app/build/
+android/.gradle/
+android/.kotlin/
+
+# 本机配置与签名密钥（切勿提交）
+android/local.properties
+android/keystore.properties
+android/*.jks
+android/*.keystore
+
+# 依赖
+node_modules/
+
+# 测试产物（日志 / 截图 / 浏览器 profile）
+tests/logs/
+tests/screenshots/
+tests/.chrome-profile/
+tests/.chrome-err.txt
+tests/.dolby-mux/
+tests/.bili-pipeline/
+
+# 系统文件
+Thumbs.db
+.DS_Store

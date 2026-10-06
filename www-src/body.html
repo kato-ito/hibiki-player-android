@@ -1,0 +1,525 @@
+<body data-theme="green">
+<div id="bg-layer"></div>
+<div id="root">
+  <div id="scrim"></div>
+
+  <div id="pages">
+    <section class="page active" id="page-library">
+      <header class="big-title">
+        <span>资料库</span>
+        <span class="sub" id="lib-sub" style="flex:1"></span>
+        <button class="icon-btn" id="lib-add-btn" aria-label="导入音频">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="22" height="22"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn" id="lib-bili-btn" aria-label="B站音频下载">
+          <span class="dot"></span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M12 3.5v9.5"/><path d="M8.6 9.6L12 13l3.4-3.4"/><path d="M5 15.5v2.6A1.9 1.9 0 006.9 20h10.2a1.9 1.9 0 001.9-1.9v-2.6"/></svg>
+        </button>
+      </header>
+      <div class="segmented lib-seg" id="lib-seg">
+        <button data-tab="lists" class="on">歌单</button>
+        <button data-tab="songs">歌曲</button>
+        <button data-tab="albums">专辑</button>
+        <button data-tab="artists">艺人</button>
+      </div>
+      <div class="sort-bar hidden" id="sort-bar">
+        <div class="segmented sort-seg" id="sort-mode">
+          <button data-sort="default" class="on">默认排序</button>
+          <button data-sort="added">按加入顺序</button>
+          <button data-sort="letter">按首字母</button>
+        </div>
+        <div class="segmented sort-seg sort-dir" id="sort-dir">
+          <button data-dir="asc" class="on">正序</button>
+          <button data-dir="desc">倒序</button>
+        </div>
+      </div>
+      <div class="lib-grid" id="lib-grid"></div>
+      <ul class="song-list hidden" id="lib-songs"></ul>
+      <div class="lib-grid hidden" id="lib-albums"></div>
+      <div class="artist-list hidden" id="lib-artists"></div>
+      <div class="alpha-index hidden" id="alpha-index"></div>
+      <div class="browse-empty hidden" id="lib-browse-empty"></div>
+      <div class="lib-empty hidden" id="lib-empty">
+        <b>还没有歌单</b><br>
+        创建歌单，导入手机里的音频开始播放
+        <div class="hint">支持 MP3 / FLAC / M4A / WAV / OGG 等格式</div>
+        <button class="btn" id="lib-empty-new">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg>
+          新建歌单
+        </button>
+      </div>
+    </section>
+
+    <section class="page" id="page-detail">
+      <header class="detail-head">
+        <button class="icon-btn" id="detail-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M15 4l-8 8 8 8"/></svg>
+        </button>
+        <h1 id="detail-title">歌单</h1>
+        <button class="icon-btn" id="detail-menu-btn" aria-label="更多">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+        </button>
+      </header>
+      <div class="detail-hero" id="detail-hero">
+        <div class="detail-hero-cover" id="detail-hero-cover"><div class="ph" id="detail-hero-ph"></div></div>
+        <div class="detail-hero-info">
+          <div id="detail-meta"></div>
+          <button class="hero-play" id="detail-play">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+            播放
+          </button>
+        </div>
+      </div>
+      <div class="detail-actions">
+        <button class="detail-action" id="detail-import">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0L7 9m5-5l5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+          导入音频
+        </button>
+        <button class="detail-action" id="detail-folder">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          导入文件夹
+        </button>
+      </div>
+      <ul class="song-list" id="detail-list"></ul>
+      <div class="detail-empty hidden" id="detail-empty">
+        歌单还是空的<br>🎵 导入音频文件，或 📂 导入整个文件夹<br>（可来自不同文件夹陆续追加）
+        <div><button class="btn" id="detail-empty-import">🎵 导入音频</button></div>
+      </div>
+    </section>
+
+    <section class="page" id="page-group">
+      <header class="detail-head">
+        <button class="icon-btn" id="group-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M15 4l-8 8 8 8"/></svg>
+        </button>
+        <h1 id="group-title">专辑</h1>
+      </header>
+      <div class="detail-hero">
+        <div class="detail-hero-cover" id="group-hero-cover"><div class="ph"></div></div>
+        <div class="detail-hero-info">
+          <div id="group-meta"></div>
+          <button class="hero-play" id="group-play">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+            播放
+          </button>
+        </div>
+      </div>
+      <ul class="song-list" id="group-list"></ul>
+    </section>
+
+    <section class="page" id="page-bili">
+      <header class="detail-head">
+        <button class="icon-btn" id="bili-back" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M15 4l-8 8 8 8"/></svg>
+        </button>
+        <h1 id="bili-head-title">B 站音频下载</h1>
+      </header>
+
+      <div id="bili-banner" class="bili-banner hidden">
+        <span class="txt" id="bili-banner-text"></span>
+        <button id="bili-banner-go">解析</button>
+        <button id="bili-banner-x" aria-label="忽略">✕</button>
+      </div>
+
+      <div class="set-card" style="margin-bottom:14px">
+        <div class="bili-input-row">
+          <input id="bili-input" placeholder="粘贴 BV / av / b23.tv 链接或分享文案" autocomplete="off">
+          <button class="bili-mini-btn" id="bili-paste">粘贴</button>
+        </div>
+        <div class="detail-actions" style="padding:12px">
+          <button class="detail-action primary" id="bili-parse">解析链接</button>
+        </div>
+        <div class="set-note">在 B 站 App 里「分享 → Hibiki Player」可直接跳到这里；复制链接后切回本应用也会自动识别。下载保存在手机「音乐 / Hibiki Player」，完成后自动加入当前歌单。
+          下载合集（多 P）视频时，会在下载文件夹里自动新建一个以**视频名**命名的子文件夹，其中的音频只用**分P名**命名。</div>
+      </div>
+
+      <div class="set-card" style="margin-bottom:14px">
+        <button class="set-row" id="bili-account-btn">
+          <span class="ic" id="bili-account-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.2" r="3.6"/><path d="M4.8 20c.6-3.6 3.6-5.8 7.2-5.8s6.6 2.2 7.2 5.8"/></svg>
+          </span>
+          <span class="set-label" id="bili-account-name">B 站账号</span>
+          <span class="set-value" id="bili-account-state">扫码登录</span>
+        </button>
+      </div>
+
+      <div class="set-card" style="margin-bottom:14px">
+        <button class="set-row" id="bili-set-dir">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></span>
+          <span class="set-label">下载文件夹</span>
+          <span class="set-value" id="bili-set-dir-val"></span>
+        </button>
+        <button class="set-row" id="bili-set-speed">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20a8 8 0 118-8"/><path d="M12 12l4.5-3"/></svg></span>
+          <span class="set-label">下载速率</span>
+          <span class="set-value" id="bili-set-speed-val"></span>
+        </button>
+        <button class="set-row" id="bili-set-pl">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15v6M14 18h6"/></svg></span>
+          <span class="set-label">下载放入歌单</span>
+          <span class="set-value" id="bili-set-pl-val"></span>
+        </button>
+      </div>
+
+      <div id="bili-result" class="hidden">
+        <div class="set-card" style="margin-bottom:16px">
+          <div class="bili-video">
+            <img id="bili-cover" alt="" src="data:,">
+            <div class="bili-video-info">
+              <div id="bili-title"></div>
+              <div id="bili-owner"></div>
+              <div id="bili-meta"></div>
+            </div>
+          </div>
+          <div class="bili-parts" id="bili-parts"></div>
+          <div class="set-row" style="flex-direction:column;align-items:stretch;gap:4px;padding:12px 14px 10px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h2l1.6-4.4A1.6 1.6 0 019.1 7.5h5.8a1.6 1.6 0 011.5 1.1L18 13h2"/><rect x="3" y="13" width="18" height="6" rx="2"/></svg></span>
+              <span class="set-label">音质</span>
+              <span class="set-value" id="bili-q-cur"></span>
+            </div>
+            <div class="segmented" id="bili-q-seg"></div>
+            <div class="set-note hidden" id="bili-q-hint" style="border:none;padding:6px 0 0"></div>
+          </div>
+          <div class="detail-actions" style="padding:12px">
+            <button class="detail-action primary" id="bili-download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8.5 10.5L12 14l3.5-3.5"/><path d="M5 17v1.5A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5V17"/></svg>
+              下载到音乐目录
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group-title hidden" id="bili-tasks-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>下载任务</span>
+        <button class="bili-mini-btn hidden" id="bili-clear" type="button">清除记录</button>
+      </div>
+      <div id="bili-tasks"></div>
+    </section>
+
+    <section class="page" id="page-search">
+      <header class="search-head">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/></svg>
+          <input id="search-input" type="search" placeholder="搜索歌曲或歌单" autocomplete="off">
+        </div>
+        <button id="search-cancel">取消</button>
+      </header>
+      <div id="search-results"></div>
+    </section>
+
+    <section class="page" id="page-settings">
+      <header class="big-title"><span>设置</span></header>
+
+      <div class="set-group">
+        <div class="set-group-title">播放</div>
+        <div class="set-card">
+          <button class="set-row cycle" id="set-mode">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v6h-6"/></svg></span>
+            <span class="set-label">播放模式</span>
+            <span class="set-value" id="set-mode-val"></span>
+          </button>
+          <button class="set-row cycle" id="set-lrc">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 5h16M4 9h10M4 13h16M4 17h7"/></svg></span>
+            <span class="set-label">载入歌词（.lrc）</span>
+            <span class="set-value">选择文件</span>
+          </button>
+          <div class="set-row" id="set-mic-row">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0014 0v-1M12 18v4"/></svg></span>
+            <span class="set-label">麦克风可视化</span>
+            <div class="switch" id="set-mic"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-title">B 站下载</div>
+        <div class="set-card">
+          <button class="set-row cycle" id="set-bili-dir">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></span>
+            <span class="set-label">下载文件夹</span>
+            <span class="set-value" id="set-bili-dir-val"></span>
+          </button>
+          <button class="set-row cycle" id="set-bili-speed">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20a8 8 0 118-8"/><path d="M12 12l4.5-3"/></svg></span>
+            <span class="set-label">下载速率</span>
+            <span class="set-value" id="set-bili-speed-val"></span>
+          </button>
+          <button class="set-row" id="set-bili-pl">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15v6M14 18h6"/></svg></span>
+            <span class="set-label">下载放入歌单</span>
+            <span class="set-value" id="set-bili-pl-val"></span>
+          </button>
+        </div>
+        <div class="set-note">下载的音频（含封面与标签）会保存到这里；速率限制只影响 B 站下载，默认不限速。
+          合集 / 多 P 视频会在该文件夹里自动建一个以视频名命名的子文件夹，里面的文件只用分P名（如「P3 正片.m4a」）。</div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-title">外观</div>
+        <div class="set-card">
+          <div class="set-row">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.1 5.6L20 10l-5.9 1.4L12 17l-2.1-5.6L4 10l5.9-1.4z"/><path d="M19 15l.9 2.3L22 18l-2.1.7L19 21l-.9-2.3L16 18l2.1-.7z"/></svg></span>
+            <span class="set-label">界面皮肤</span>
+          </div>
+          <div class="swatch-row" id="swatch-row"></div>
+          <div class="set-row" id="set-bg-row">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5-9 9"/></svg></span>
+            <span class="set-label">自定义背景</span>
+            <div class="switch" id="set-bg"></div>
+          </div>
+          <div class="slider-row hidden" id="set-bg-panel">
+            <div class="lab"><span>背景浓度</span><span id="set-bg-dim-val">55%</span></div>
+            <input type="range" id="set-bg-dim" min="0.1" max="0.92" step="0.02" value="0.55">
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button class="detail-action" id="set-bg-pick" style="flex:1">选择图片</button>
+              <button class="detail-action" id="set-bg-clear" style="flex:1">清除背景</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-title">杜比 / DTS 解码输出</div>
+        <div class="set-card">
+          <div class="set-row" style="flex-direction:column;align-items:stretch;gap:4px;padding:12px 14px 8px">
+            <div style="display:flex;align-items:center;gap:12px">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9.5 9.5 0 010 13"/></svg></span>
+              <span class="set-label">输出方式</span>
+              <span class="set-value" id="dolby-cur"></span>
+            </div>
+            <div class="segmented" id="dolby-seg">
+              <button data-mode="native">原生输出</button>
+              <button data-mode="device">下混输出</button>
+            </div>
+            <div class="set-note" id="dolby-note" style="border-top:none;padding:8px 0 0">当前输出设备：播放任一音频后显示</div>
+          </div>
+          <div class="set-note">**原生输出**：保留 5.1 / 7.1 原始声道布局，交由系统空间音效渲染；
+          **下混输出**：按当前输出设备的声道数重编码降混（例如 7.1 → 5.1，设备仅立体声时降为 2.0），
+          由解码器按标准系数下混，而不是简单丢弃声道。改动自下一首播放起生效。</div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-title">音频可视化</div>
+        <div class="set-card">
+          <div class="set-row" id="set-viz-row">
+            <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 4v16M15 9v6M19 6v12M21 12h0"/></svg></span>
+            <span class="set-label">在播放界面显示</span>
+            <div class="switch" id="set-viz"></div>
+          </div>
+          <div class="set-note">开启后，正在播放界面可用「波形 / 频谱」实时数据图（频率上限随文件采样率自动适配）。</div>
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-group-title">关于</div>
+        <div class="set-card">
+          <div class="set-note" id="about-note"></div>
+        </div>
+      </div>
+      <div class="set-foot" id="set-foot">Hibiki Player</div>
+    </section>
+  </div>
+
+  <div id="mini-player" class="gone">
+    <div id="mini-progress"><div class="track"></div><div class="fill" id="mini-progress-fill"></div></div>
+    <button class="mini-art" id="mini-art" aria-label="打开播放界面">
+      <div class="ph" id="mini-art-ph"></div>
+      <img id="mini-art-img" alt="" hidden>
+    </button>
+    <div class="mini-text" id="mini-text">
+      <div id="mini-title"></div>
+      <div id="mini-artist"></div>
+    </div>
+    <button class="mini-btn" id="mini-prev" aria-label="上一首">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg>
+    </button>
+    <button class="mini-btn" id="mini-play" aria-label="播放/暂停">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+    </button>
+    <button class="mini-btn" id="mini-next" aria-label="下一首">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg>
+    </button>
+  </div>
+
+  <nav id="tabbar">
+    <button class="tab active" data-page="library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.6" y="4.2" width="16.8" height="4.4" rx="1.6"/><rect x="5.1" y="9.8" width="13.8" height="4.4" rx="1.6"/><rect x="6.6" y="15.4" width="10.8" height="4.4" rx="1.6"/></svg>
+      资料库
+    </button>
+    <button class="tab" data-page="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.4"/><path d="M20 20l-4.6-4.6"/></svg>
+      搜索
+    </button>
+    <button class="tab" data-page="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 00.34 1.87l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.87-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1-1.55 1.7 1.7 0 00-1.87.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.87 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1 1.7 1.7 0 00-.34-1.87l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.87.34h0a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55h0a1.7 1.7 0 001.87-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.87v0a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/></svg>
+      设置
+    </button>
+  </nav>
+
+  <section id="np" aria-label="正在播放">
+    <div id="np-bg"></div>
+    <div id="np-shade"></div>
+    <div id="np-hint" style="opacity:0"></div>
+    <div id="np-body">
+      <div class="np-top">
+        <button class="icon-btn" id="np-close" aria-label="收起">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="np-titles">
+          <div id="np-title">未在播放</div>
+          <div id="np-artist"></div>
+        </div>
+        <button class="icon-btn" id="np-menu" aria-label="更多">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+        </button>
+      </div>
+      <div id="np-art-zone">
+        <div id="np-art">
+          <div class="ph" id="np-art-ph"></div>
+          <img id="np-art-img" alt="" hidden>
+        </div>
+        <div id="np-lyrics">
+          <div id="np-lyrics-inner"></div>
+          <div id="np-lyrics-empty">暂无歌词<br><br>在设置页选择 .lrc 歌词文件载入</div>
+        </div>
+        <div id="np-viz">
+          <div id="np-viz-tabs">
+            <button data-tab="spec" class="active">频谱</button>
+            <button data-tab="wave">波形</button>
+            <button id="np-viz-mic" aria-label="麦克风输入">🎤</button>
+          </div>
+          <div id="np-canvas-wrap"><canvas id="np-canvas"></canvas></div>
+          <div id="np-viz-note"></div>
+          <div id="np-viz-axis">0–24 kHz</div>
+        </div>
+      </div>
+      <div id="np-progress">
+        <div id="np-times"><span id="np-cur">0:00</span><span id="np-dur">-:--</span></div>
+        <div class="seek" id="np-seek"><div class="track"></div><div class="fill" id="np-seek-fill"></div><div class="knob" id="np-seek-knob"></div></div>
+      </div>
+      <div id="np-controls">
+        <button class="np-ctl" id="np-prev" aria-label="上一首">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg>
+        </button>
+        <button class="np-ctl small" id="np-back15" aria-label="快退 15 秒">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11.6 5.2a7.3 7.3 0 1 1-7.2 6.2"/>
+            <path d="M9.2 2.9l2.4 2.3-2.4 2.3"/>
+            <text x="12.4" y="15.6" font-size="7.6" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text>
+          </svg>
+        </button>
+        <button id="np-play" aria-label="播放/暂停">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        </button>
+        <button class="np-ctl small" id="np-fwd15" aria-label="快进 15 秒">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.4 5.2a7.3 7.3 0 1 0 7.2 6.2"/>
+            <path d="M14.8 2.9l-2.4 2.3 2.4 2.3"/>
+            <text x="11.6" y="15.6" font-size="7.6" font-weight="700" text-anchor="middle" fill="currentColor" stroke="none">15</text>
+          </svg>
+        </button>
+        <button class="np-ctl" id="np-next" aria-label="下一首">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg>
+        </button>
+      </div>
+      <div id="np-extra">
+        <button class="icon-btn" id="np-lyrics-btn" aria-label="歌词">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20.5l-6.6-6.6a4.2 4.2 0 015.9-5.9l.7.7.7-.7a4.2 4.2 0 015.9 5.9z"/></svg>
+        </button>
+        <button class="icon-btn" id="np-viz-btn" aria-label="可视化">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 4v16M15 9v6M19 6v12M21 12h0"/></svg>
+        </button>
+        <button class="icon-btn" id="np-vol-btn" aria-label="音量">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H3v6h3l5 4z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 010 7M18.5 5.5a9.5 9.5 0 010 13"/></svg>
+        </button>
+        <button class="icon-btn" id="np-queue-btn" aria-label="播放队列">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h11M4 12h11M4 18h7M17 14h3M17 17h3"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="np-volume-pop" class="hidden">
+      <button class="mute" id="np-mute">🔊</button>
+      <input type="range" id="np-vol" min="0" max="1" step="0.01" value="1">
+      <span class="val" id="np-vol-label">100%</span>
+    </div>
+  </section>
+
+  <section class="sheet" id="queue">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2>接下来播放</h2>
+      <span class="count" id="queue-count"></span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="queue-mode" aria-label="播放模式">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v6h-6"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body" id="queue-body">
+      <ul class="song-list" id="queue-list"></ul>
+    </div>
+  </section>
+
+  <section class="sheet" id="qr-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <h2>扫码登录 B 站</h2>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="qr-refresh" aria-label="刷新二维码">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><path d="M20 11a8 8 0 10-2.3 5.7"/><path d="M20 5v6h-6"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body pad" style="text-align:center">
+      <canvas id="qr-canvas" width="216" height="216" style="width:216px;height:216px"></canvas>
+      <div class="set-note" id="qr-status" style="border:none;font-size:14px;color:var(--text)">正在获取二维码…</div>
+      <div class="set-note">扫上方二维码并在手机上确认，即可解锁 Hi-Res 无损 FLAC 与杜比全景声音质。<br>
+        只有一台手机时：点下面的「保存二维码到相册」，再打开 B 站 App「扫一扫 → 相册」选中刚保存的图片即可。登录信息仅保存在本机，可随时退出登录。</div>
+      <div class="detail-actions" style="padding-top:8px">
+        <button class="detail-action" id="qr-save">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8.5 10.5L12 14l3.5-3.5"/><path d="M5 17v1.5A1.5 1.5 0 006.5 20h11a1.5 1.5 0 001.5-1.5V17"/></svg>
+          保存二维码到相册
+        </button>
+      </div>
+      <div class="detail-actions" style="padding-top:8px">
+        <button class="detail-action" id="qr-logout">退出登录</button>
+        <button class="detail-action primary" id="qr-close">完成</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="sheet" id="menu">
+    <div class="sheet-handle"></div>
+    <div class="menu-title" id="menu-title"></div>
+    <div id="menu-items"></div>
+    <button class="menu-cancel" id="menu-cancel">取消</button>
+  </section>
+
+  <div id="msel-bar">
+    <button id="msel-all">全选</button>
+    <button class="danger" id="msel-del" disabled>删除选中</button>
+    <button id="msel-cancel">取消</button>
+  </div>
+
+  <div id="dialog">
+    <div id="dialog-card">
+      <h3 id="dialog-title">新建歌单</h3>
+      <div id="dialog-note" class="hidden"></div>
+      <input id="dialog-input" placeholder="输入歌单名称" autocomplete="off">
+      <div class="dialog-btns">
+        <button id="dialog-cancel">取消</button>
+        <button class="primary" id="dialog-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<!-- 收起播放界面时，封面提到独立图层飞回迷你条（与面板下滑同时进行） -->
+<div id="np-art-layer"></div>
+
+<input type="file" id="pick-files" multiple hidden>
+<input type="file" id="pick-dir" webkitdirectory multiple hidden>
+<input type="file" id="pick-lrc" accept=".lrc,.txt,text/plain" hidden>
+<input type="file" id="pick-img" accept="image/*" hidden>
