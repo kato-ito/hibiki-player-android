@@ -51,6 +51,7 @@ class MainActivity : Activity() {
 
     private var pendingPick: PendingPick? = null
     private var pendingPermissionRequest: PermissionRequest? = null
+    private var playing = false                                  // 页面推来的播放状态（决定是否暂停 WebView）
 
     companion object {
         private const val REQ_FILES = 1001
@@ -60,7 +61,10 @@ class MainActivity : Activity() {
         private const val REQ_TREE = 1005
         private const val REQ_MIC = 2001
         private const val REQ_STORAGE = 2002
-        private const val WWW_VERSION = "2.30.0"
+        private const val REQ_NOTIFY = 2003
+        // 页面资源解包缓存键：页面内容有变（哪怕版本号没变）也要跟着改，
+        // 否则覆盖安装时会把上一份 index.html 一直用下去（WWW_VERSION 只用于这一步判断）
+        private const val WWW_VERSION = "2.31.1-1"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,6 +119,9 @@ class MainActivity : Activity() {
         val b = Bridge(this, webView, registry)
         bridge = b
         webView.addJavascriptInterface(b, "AndroidBridge")
+        // 通知栏 / 锁屏 / 耳机按键 → 页面
+        PlaybackService.commandSink = { cmd -> b.playerCmd(cmd) }
+        requestNotifyPermission()
         webView.loadUrl("http://127.0.0.1:" + port + "/")
         handleIncomingIntent(intent)
     }
@@ -180,11 +187,59 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
         }
         server = null
+        if (!playing) {
+            PlaybackService.commandSink = null
+            PlaybackService.stop(this)
+        }
         super.onDestroy()
+    }
+
+    /** Android 13+ 需要用户允许通知，通知栏 / 锁屏控制才会显示（拒绝也不影响播放） */
+    private fun requestNotifyPermission() {
+        if (Build.VERSION.SDK_INT < 33) return
+        try {
+            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), REQ_NOTIFY)
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    /**
+     * 页面推来的播放状态（Bridge 的 playerState）：驱动前台服务与通知栏 / 锁屏。
+     * 页面是播放的真正执行者，这里只负责保活与系统级控制。
+     */
+    fun playerState(requestId: String, payload: String) {
+        try {
+            val o = if (payload.isBlank()) JSONObject() else JSONObject(payload)
+            val isPlaying = o.optBoolean("playing", false)
+            playing = isPlaying
+            val title = o.optString("title", "")
+            if (title.isBlank() && !isPlaying) {
+                PlaybackService.stop(this)
+            } else {
+                PlaybackService.update(
+                    this,
+                    title,
+                    o.optString("artist", ""),
+                    o.optString("album", ""),
+                    isPlaying,
+                    o.optString("cover", ""),
+                    o.optString("coverData", ""),   // 本地文件的内嵌封面由页面下采样后直传
+                    o.optDouble("position", 0.0),
+                    o.optDouble("duration", 0.0)
+                )
+            }
+            bridge?.resolve(requestId, true, "ok")
+        } catch (e: Exception) {
+            bridge?.resolve(requestId, false, "playerState failed: " + e.message)
+        }
     }
 
     override fun onPause() {
         super.onPause()
+        // 正在播放时不要把 WebView 挂起：后台播放靠前台服务 + 唤醒锁保活
+        if (playing) return
         try {
             webView.onPause()
         } catch (e: Exception) {
@@ -203,7 +258,18 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+        // 界面层（播放面板 / 详情页等）由页面历史逐层关闭
+        if (webView.canGoBack()) {
+            webView.goBack()
+            return
+        }
+        // 正在播放：返回键只把应用收进后台（像 Poweramp），页面和后台播放都留着；
+        // 直接 finish 会连 WebView 一起销毁，播放就断了
+        if (playing) {
+            moveTaskToBack(true)
+            return
+        }
+        super.onBackPressed()
     }
 
     override fun onRequestPermissionsResult(

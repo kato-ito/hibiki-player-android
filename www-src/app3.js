@@ -1647,6 +1647,8 @@ function applyNowMeta() {
     el("np-viz-note").textContent = "";
   renderNpLyrics();
   syncMediaSession();
+  if (typeof updateNpBusy === "function") updateNpBusy();
+  if (typeof reportPlayerState === "function") reportPlayerState();
 }
 /* 封面 Morph：从迷你条封面位置放大进入播放界面（Apple Music 的标志性转场） */
 function morphArtworkIn(fromRect) {
@@ -2157,44 +2159,170 @@ function pickLyrics() {
 
 /* ================= 事件接线 ================= */
 /**
- * 进度条拖动：拖动过程中只更新界面（平滑跟手），松手才真正 seek。
- * 原因：特殊格式（杜比 PCM WAV）每个 currentTime 都会触发新的 HTTP Range 请求，
- * 若逐帧 seek 会卡顿且看起来「拖不动」。
+ * 进度条拖动（播放界面 + 迷你条共用同一套）：界面始终跟手，拖动中按 ~200ms 节流真正跳转，
+ * 松手（或手势被系统打断）时落到最终位置。
+ *
+ * 真机上「划不动 / 拖不动」的四个坑，这里逐个堵上：
+ *   ① 横向拖动被浏览器判成滚动手势并补发 pointercancel —— 进度条自己接管手势
+ *      （CSS `touch-action: none`），拖动期间再拦一次 window 上的 touchmove；
+ *   ② 进度条只有几十像素高，手指一斜就滑出元素 —— 移动 / 抬手监听全部挂在 window 上
+ *      （不依赖 setPointerCapture：它抛异常或丢事件时，拖动不会跟着一起丢）；
+ *   ③ 老 WebView 只派发 touch 事件、没有 PointerEvent —— Pointer / Touch / Mouse
+ *      三套事件都接，谁先开始拖动谁负责到结束（同一时刻只允许一个拖动）；
+ *   ④ 特殊格式（杜比 PCM WAV）每个 currentTime 都会发一次 HTTP Range 请求 ——
+ *      拖动中节流跳转，既不卡顿，也不会「松手没反应」。
  */
-function makeSeekable(bar, fn) {
-  var seeking = false;
-  bar.addEventListener("pointerdown", function (e) {
-    seeking = true;
-    try { bar.setPointerCapture(e.pointerId); } catch (err) {}
-    fn(e, true);
-  });
-  bar.addEventListener("pointermove", function (e) { if (seeking) fn(e, true); });
-  var end = function (e) {
-    if (!seeking) return;
-    seeking = false;
-    if (e.type === "pointerup") fn(e, false);      // 取消手势不跳转
-    else el("np-seek").classList.remove("dragging");
-  };
-  bar.addEventListener("pointerup", end);
-  bar.addEventListener("pointercancel", end);
-}
-function seekFromEvent(e, previewOnly) {
+var seekDrag = null;              // 当前拖动状态（null = 没人在拖）
+var SEEK_LIVE_MS = 200;           // 拖动过程中真正跳转的节流间隔
+
+/** 把进度比例应用到界面（总是）与媒体（commit 时） */
+function applySeekFrac(frac, commit) {
   if (!media || !isFinite(media.duration) || media.duration <= 0) return;
-  var bar = e.currentTarget || el("np-seek");
-  var r = bar.getBoundingClientRect();
-  if (!r.width) return;
-  var frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  frac = Math.min(1, Math.max(0, frac));
   var t = frac * media.duration;
-  if (previewOnly) {
-    el("np-seek-fill").style.width = (frac * 100) + "%";
-    el("np-seek-knob").style.left = (frac * 100) + "%";
-    el("np-cur").textContent = fmtTime(t);
-    el("np-seek").classList.add("dragging");
-    return;
-  }
+  el("np-seek-fill").style.width = (frac * 100) + "%";
+  el("np-seek-knob").style.left = (frac * 100) + "%";
+  el("mini-progress-fill").style.width = (frac * 100) + "%";
+  el("np-cur").textContent = fmtTime(t);
+  if (!commit) return;
+  try { media.currentTime = Math.min(media.duration - 0.05, Math.max(0, t)); }
+  catch (err) { /* 个别机型对不可 seek 的源会抛异常：界面照常，别把拖动搞挂 */ }
+  if (npOpen && lyricsOn) syncLyrics(media.currentTime);   // 暂停态拖动也要同步歌词高亮
+  reportPlayerState();                                     // 锁屏 / 通知栏的进度跟着走
+}
+
+/** 结束拖动：清掉 dragging 标记，并落到最终位置 */
+function endSeekDrag(cancelled) {
+  var d = seekDrag;
+  if (!d) return;
+  seekDrag = null;
+  if (d.timer) { clearTimeout(d.timer); d.timer = 0; }
+  try { d.unhook(); } catch (err) {}
   el("np-seek").classList.remove("dragging");
-  media.currentTime = t;
+  // 松手（含轻点一下）就一定落到手指位置；被系统打断时，手指已经走过的位置同样算数
+  if (!cancelled || d.moved) d.apply(d.frac, true);
   updateProgressUI();
+}
+
+/** 从事件里取出手指坐标（按事件族区分，确保是同一根手指） */
+function seekPoint(kind, id, ev) {
+  if (kind === "touch") {
+    var list = (ev.touches && ev.touches.length) ? ev.touches : ev.changedTouches;
+    if (!list || !list.length) return null;
+    var t = list[0];
+    for (var i = 0; i < list.length; i++) if (list[i].identifier === id) { t = list[i]; break; }
+    return { x: t.clientX, y: t.clientY, cancelable: ev.cancelable };
+  }
+  if (kind === "pointer" && ev.pointerId !== undefined && id !== undefined && ev.pointerId !== id) return null;
+  if (ev.clientX === undefined) return null;
+  return { x: ev.clientX, y: ev.clientY, cancelable: ev.cancelable };
+}
+
+/** 节流点到了：把「手指当前所在位置」真正写进播放器（手指停住不动也会落到这里） */
+function seekDragCommit() {
+  var d = seekDrag;
+  if (!d) return;
+  if (d.timer) { clearTimeout(d.timer); d.timer = 0; }
+  if (!d.pending) return;
+  d.pending = false;
+  d.lastSeek = Date.now();
+  d.apply(d.frac, true);
+}
+
+/** 拖动中：跟手 + 节流真跳转（拖到哪儿，声音就跟到哪儿） */
+function onSeekDragMove(p) {
+  var d = seekDrag;
+  if (!d) return;
+  if (!d.moved && (Math.abs(p.x - d.x0) > 2 || Math.abs(p.y - d.y0) > 2)) d.moved = true;
+  d.lastEvent = Date.now();
+  d.frac = d.w > 0 ? Math.min(1, Math.max(0, (p.x - d.l) / d.w)) : 0;
+  d.apply(d.frac, false);
+  d.pending = true;
+  var wait = SEEK_LIVE_MS - (d.lastEvent - d.lastSeek);
+  if (wait <= 0) seekDragCommit();
+  else if (!d.timer) d.timer = setTimeout(seekDragCommit, wait);
+}
+
+/**
+ * 开始拖动：移动 / 抬手 / 取消 全部挂到 window（捕获阶段），
+ * 手指滑出进度条、滑到屏幕边缘都不会丢事件。
+ */
+function startSeekDrag(measure, ev, kind, id, x, y) {
+  if (seekDrag && Date.now() - seekDrag.lastEvent > 1200) endSeekDrag(true);  // 上一次没收到收尾事件的兜底
+  if (seekDrag) return;
+  if (!media || !isFinite(media.duration) || media.duration <= 0) return;     // 时长为 0：拖了也没意义
+  var r = measure.getBoundingClientRect();
+  if (!r.width) return;
+  var d = {
+    kind: kind, id: id, apply: applySeekFrac, unhook: function () {},
+    l: r.left, w: r.width, x0: x, y0: y, frac: 0, moved: false,
+    lastSeek: Date.now(), lastEvent: Date.now(), pending: false, timer: 0
+  };
+  d.frac = Math.min(1, Math.max(0, (x - r.left) / r.width));
+  seekDrag = d;
+  el("np-seek").classList.add("dragging");
+  d.apply(d.frac, false);                       // 按下就把界面挪到手指位置（轻点即跳转）
+  // touchstart 的监听是 passive 的（不需要在这里拦默认行为，touch-action: none 已经接管）
+  if (ev.cancelable && ev.type !== "touchstart") { try { ev.preventDefault(); } catch (err) {} }
+  hookSeekDrag(d);
+}
+
+/** 把本次拖动要用的 window 监听挂上；结束时会由 d.unhook() 全部摘掉 */
+function hookSeekDrag(d) {
+  var kind = d.kind, id = d.id;
+  var opts = kind === "touch" ? { capture: true, passive: false } : { capture: true };
+  var move = function (e) {
+    var p = seekPoint(kind, id, e);
+    if (!p) return;
+    onSeekDragMove(p);
+    // 手指压在进度条上时，任何滚动 / 回弹都别发生
+    if (p.cancelable && kind === "touch") { try { e.preventDefault(); } catch (err) {} }
+  };
+  var up = function (e) {
+    if (kind === "pointer" && e.pointerId !== id) return;
+    endSeekDrag(false);
+  };
+  var cancel = function (e) {
+    if (kind === "pointer" && e.pointerId !== id) return;
+    endSeekDrag(true);
+  };
+  var lost = function () { endSeekDrag(true); };
+  var targets = null;
+  if (kind === "pointer") targets = [["pointermove", move], ["pointerup", up], ["pointercancel", cancel]];
+  else if (kind === "touch") targets = [["touchmove", move], ["touchend", up], ["touchcancel", cancel]];
+  else targets = [["mousemove", move], ["mouseup", up]];
+  targets.forEach(function (t) { window.addEventListener(t[0], t[1], opts); });
+  window.addEventListener("blur", lost);
+  document.addEventListener("visibilitychange", lost);
+  d.unhook = function () {
+    targets.forEach(function (t) { window.removeEventListener(t[0], t[1], opts); });
+    window.removeEventListener("blur", lost);
+    document.removeEventListener("visibilitychange", lost);
+  };
+}
+
+/**
+ * 让 hit 区域可以拖动进度：measure 用来把手指的 x 折算成时间
+ * （命中区域和可视进度条可以不是同一个元素，便于把可拖范围做大）。
+ */
+function makeSeekable(hit, measure) {
+  if (!hit || !measure) return;
+  hit.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startSeekDrag(measure, e, "pointer", e.pointerId, e.clientX, e.clientY);
+  });
+  // 没有 PointerEvent 的旧 WebView：退回触摸事件（有 PointerEvent 时 pointerdown 已经接管）
+  hit.addEventListener("touchstart", function (e) {
+    if (seekDrag) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    startSeekDrag(measure, e, "touch", t.identifier, t.clientX, t.clientY);
+  }, { passive: true });
+  // 桌面浏览器 / 鼠标
+  hit.addEventListener("mousedown", function (e) {
+    if (seekDrag || e.button !== 0) return;
+    startSeekDrag(measure, e, "mouse", 0, e.clientX, e.clientY);
+  });
 }
 function armLongPress(node, fn) {
   var timer = 0, sx = 0, sy = 0;
@@ -3193,13 +3321,29 @@ function wireEvents() {
   /* 迷你条 */
   el("mini-art").addEventListener("click", function () { openNP(); });
   el("mini-text").addEventListener("click", function () { openNP(); });
-  el("mini-prev").addEventListener("click", function (e) { e.stopPropagation(); if (!micOn && pl.length) playIndex(plIndex - 1); });
+  el("mini-prev").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (micOn) return;
+    if (!pl.length && !ensureQueue()) return;
+    playIndex(plIndex - 1);
+  });
   el("mini-play").addEventListener("click", function (e) { e.stopPropagation(); togglePlayPause(); });
-  el("mini-next").addEventListener("click", function (e) { e.stopPropagation(); if (!micOn && pl.length) playIndex(plIndex + 1); });
-  makeSeekable(el("mini-progress"), seekFromEvent);
+  el("mini-next").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (micOn) return;
+    if (!pl.length && !ensureQueue()) return;
+    playIndex(plIndex + 1);
+  });
+  makeSeekable(el("mini-progress"), el("mini-progress"));
+  // 拖动 / 点迷你进度条只做跳转，不要顺带打开播放界面
+  el("mini-progress").addEventListener("click", function (e) { e.stopPropagation(); });
 
   /* 正在播放 */
   el("np-close").addEventListener("click", closeNP);
+  // 点封面 = 收起播放界面（点歌词 / 可视化区域不会误触发）
+  el("np-art").addEventListener("click", function () {
+    if (npOpen) closeNP();
+  });
   el("np-menu").addEventListener("click", function () {
     openMenu("更多", [
       { label: "📃 载入歌词", fn: pickLyrics },
@@ -3246,7 +3390,8 @@ function wireEvents() {
   el("np-mute").addEventListener("click", toggleMute);
   el("np-vol").addEventListener("input", function () { setVolume(parseFloat(el("np-vol").value)); });
   el("np-queue-btn").addEventListener("click", openQueue);
-  makeSeekable(el("np-seek"), seekFromEvent);
+  // 命中区域用整块「时间 + 进度条」，可视进度线保持细线（手指不用瞄准那 4px 细线）
+  makeSeekable(el("np-progress"), el("np-seek"));
   document.querySelectorAll("#np-viz-tabs button[data-tab]").forEach(function (b) {
     b.addEventListener("click", function () {
       vizTab = b.dataset.tab;
@@ -3268,7 +3413,8 @@ function wireEvents() {
   /* NP 下拉关闭手势 */
   var gs = null;
   el("np-body").addEventListener("pointerdown", function (e) {
-    if (e.target.closest("button, input, .seek, .np-line, #np-viz-tabs, #np-lyrics")) return;
+    // #np-progress 整块是可拖区域（进度条 + 时间），别把它当成「下拉关闭面板」的手势起点
+    if (e.target.closest("button, input, .seek, .np-line, #np-progress, #np-viz-tabs, #np-lyrics")) return;
     gs = { y: e.clientY, dy: 0 };
   });
   window.addEventListener("pointermove", function (e) {

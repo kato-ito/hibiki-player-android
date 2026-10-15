@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- 后台播放：前台服务 + 通知栏/锁屏控制 + 熄屏继续播放 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Android 9 及以下把下载的音频写入公共音乐目录需要存储权限；Android 10+ 用 MediaStore 免权限 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -42,6 +47,12 @@
                 <data android:scheme="https" android:host="b23.tv" />
             </intent-filter>
         </activity>
+
+        <!-- 后台播放服务：通知栏 / 锁屏控制，切到后台不会被系统回收 -->
+        <service
+            android:name=".PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 
 </manifest>

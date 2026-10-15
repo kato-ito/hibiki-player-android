@@ -226,12 +226,17 @@ body[data-theme="white"].has-bg #bg-layer::after { background: #0d0d12; }
 }
 #mini-player.gone { transform: translateY(calc(100% + var(--mini-gap) + 6px)) scale(0.92); opacity: 0; pointer-events: none; }
 #mini-progress {
-  position: absolute; left: 8px; right: 8px; bottom: 5px; height: 2.5px;
-  cursor: pointer; border-radius: 2px; overflow: hidden;
+  /* 进度线本身只有 2.5px，手指点不中：整个盒子做成 18px 高的可点区域，线画在里面 */
+  position: absolute; left: 8px; right: 8px; bottom: 0; height: 18px;
+  cursor: pointer; background: transparent;
+  touch-action: none; user-select: none; -webkit-user-select: none;
 }
-#mini-progress .track { position: absolute; inset: 0; background: var(--track); }
+#mini-progress .track {
+  position: absolute; left: 0; right: 0; bottom: 5px; top: auto; height: 2.5px;
+  background: var(--track); border-radius: 2px;
+}
 #mini-progress .fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  position: absolute; left: 0; bottom: 5px; top: auto; height: 2.5px; width: 0;
   background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 2px;
   transition: width .18s linear;
 }
@@ -652,20 +657,52 @@ body[data-theme="white"] .np-line.cur { color: #fc3c44; }
 #np-viz-axis { text-align: center; font-size: 12px; color: rgba(255,255,255,0.5); padding: 6px 0 2px; flex: none; }
 #np-viz-note { text-align: center; font-size: 12.5px; color: rgba(255,255,255,0.5); padding-bottom: 4px; flex: none; }
 /* 进度 */
-#np-progress { flex: none; padding: 10px 0 4px; }
+/* 切歌后需要内置解码（杜比 / DTS）时的提示：避免看起来「点了没反应」 */
+#np-busy {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 9px;
+  padding: 5px 12px 5px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.16); backdrop-filter: blur(14px);
+  font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.9);
+  transition: opacity .2s, transform .2s var(--ios-ease);
+}
+#np-busy.hidden { display: none; }
+#np-busy .spin {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+  animation: npSpin .8s linear infinite;
+}
+@keyframes npSpin { to { transform: rotate(360deg); } }
+#np-progress {
+  flex: none; padding: 10px 0 4px;
+  /* 整块「时间 + 进度条」都是可拖区域：进度线本身只有 4px，手指点不中 */
+  touch-action: none; -ms-touch-action: none;
+}
 #np-times { display: flex; justify-content: space-between; font-size: 12.5px; color: rgba(255,255,255,0.6); padding: 0 2px 6px; font-variant-numeric: tabular-nums; }
-.seek { position: relative; height: 30px; display: flex; align-items: center; cursor: pointer; }
-.seek .track { position: absolute; left: 0; right: 0; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.22); overflow: hidden; }
-.seek .fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 3px; }
+.seek {
+  --seek-line: 6px;                       /* 进度线粗细：填充与轨道同粗，别铺满整个可拖区域 */
+  position: relative; height: 30px; display: flex; align-items: center; cursor: pointer;
+  /* 触摸设备上必须自己接管手势，否则浏览器会把横向拖动判成滚动并发出 pointercancel，
+     表现就是「进度条划不动、只能点一下」 */
+  touch-action: none; -ms-touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.seek .track {
+  position: absolute; left: 0; right: 0; top: calc(50% - var(--seek-line) / 2);
+  height: var(--seek-line); border-radius: 3px; background: rgba(255,255,255,0.22); overflow: hidden;
+}
+.seek .fill {
+  position: absolute; left: 0; top: calc(50% - var(--seek-line) / 2);
+  height: var(--seek-line); background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 3px;
+}
 .seek .knob {
   position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff;
   box-shadow: 0 1px 6px rgba(0,0,0,0.5); opacity: 0; transition: opacity .15s;
   transform: translateX(-50%);
 }
 .seek:active .knob { opacity: 1; }
-/* 播放界面：细进度线 + 常显进度点（拖动时放大），不再是一条粗进度条 */
-#np-seek { height: 26px; }
-#np-seek .track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.26); }
+/* 播放界面：细进度线 + 常显进度点（拖动时放大），不再是一条粗进度条；
+   可拖区域保持 36px 高 —— 细线看得清，手指也点得中 */
+#np-seek { --seek-line: 4px; height: 36px; }
+#np-seek .track { border-radius: 2px; background: rgba(255,255,255,0.26); }
 #np-seek .fill { border-radius: 2px; }
 #np-seek .knob {
   opacity: 1; width: 12px; height: 12px;

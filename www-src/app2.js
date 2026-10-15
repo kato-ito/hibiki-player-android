@@ -203,10 +203,25 @@ function seekBy(dt) {
   if (!media || !isFinite(media.duration)) return;
   seekTo(media.currentTime + dt);
 }
+/** 冷启动（后台被杀后重开）时队列是空的：用当前 / 第一个歌单重建，并沿用上次播放到的位置 */
+function ensureQueue() {
+  if (pl.length) return true;
+  var p = plById(curPlId) || (lib.length ? lib[0] : null);
+  if (!p || !p.items.length) return false;
+  curPlId = p.id;
+  pl = p.items.map(function (it) { return it.id; });
+  saveLib();
+  var idx = (typeof lastIdx === "number" && lastIdx >= 0) ? lastIdx : 0;
+  plIndex = Math.min(idx, pl.length - 1);
+  return true;
+}
 function togglePlayPause() {
   if (micOn) return;
   if (!media) {
-    if (pl.length) playIndex(plIndex);
+    // 没有音频对象（重开应用 / 还没播过）：先把队列恢复出来再播，
+    // 否则「直接点迷你条的播放键」会毫无反应
+    if (!pl.length && !ensureQueue()) { showToast("请先导入音频或新建歌单"); return; }
+    playIndex(plIndex);
     return;
   }
   if (media.paused) { media.play().catch(function () {}); }
@@ -229,6 +244,124 @@ function toggleMute() {
   muted = !muted;
   applyVolume();
 }
+
+/* ================= 原生播放服务（通知栏 / 锁屏控制 + 后台保活） ================= */
+var playerStateTimer = 0;
+/** 通知栏封面：走本地服务的 /cover/<id>（原生侧会带 UA 取图，裸流下载的封面也能显示） */
+function npCoverURL() {
+  if (!NATIVE || !curKey) return "";
+  var e = registry.get(curKey);
+  if (!e) return "";
+  return BOOT.base + "/cover/" + encodeURIComponent(curKey) + "?s=" + (e.size || 0);
+}
+/**
+ * 通知栏 / 锁屏封面之二：本地文件的内嵌封面只有页面读得到（且是几百 KB 的 data URL，
+ * 直接塞进 Intent 会撞 Binder 1MB 限制），这里先下采样到 512px 再直传原生。
+ * 每首歌只在第一次上报时带图，之后只带地址，避免每 5 秒重复传图。
+ * （/cover/<id> 这类「应用内存封面」交给原生自己取，见 npCoverURL）
+ */
+var npCoverBig = "", npCoverBigFor = "", npCoverBigTried = "", npCoverBigBusy = "", npCoverBigSent = "";
+function shrinkCover(src, cb) {
+  var img = new Image();
+  img.onload = function () {
+    try {
+      var S = 512, w = img.naturalWidth || S, h = img.naturalHeight || S;
+      var s = Math.min(S / w, S / h, 1);
+      var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+      var cv = document.createElement("canvas");
+      cv.width = cw; cv.height = ch;
+      cv.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      cb(cv.toDataURL("image/jpeg", 0.82));
+    } catch (e) { cb(""); }
+  };
+  img.onerror = function () { cb(""); };
+  img.src = src;
+}
+function npCoverDataForReport() {
+  if (!NATIVE || !curKey) return "";
+  if (npCoverBigSent === curKey) return "";
+  var meta = trackMeta(curKey);
+  var src = meta && meta.cover;
+  if (!src) {
+    // 标签还没解析出来：先别标记成「已发送」，等元数据到了会再上报一次
+    if (meta && meta.loaded) npCoverBigSent = curKey;
+    return "";
+  }
+  if (src.indexOf("data:") !== 0) { npCoverBigSent = curKey; return ""; }  // 地址型封面由原生自取
+  if (npCoverBigFor === curKey && npCoverBig) { npCoverBigSent = curKey; return npCoverBig; }
+  if (npCoverBigBusy !== curKey && npCoverBigTried !== curKey) {
+    npCoverBigBusy = curKey;
+    var key = curKey;
+    shrinkCover(src, function (data) {
+      if (npCoverBigBusy === key) npCoverBigBusy = "";
+      npCoverBigTried = key;
+      if (data) { npCoverBig = data; npCoverBigFor = key; }
+      if (curKey === key) reportPlayerState();     // 图准备好了立刻补报，通知栏马上有封面
+    });
+  }
+  return "";
+}
+function npReportTitle() {
+  if (!curKey) return "";
+  var t = itemOf(curKey);
+  var meta = trackMeta(curKey);
+  return (meta && meta.title) || (t && t.name ? t.name.replace(/\.[^.]+$/, "") : "") || "";
+}
+/** 把播放状态推给原生：前台服务据此更新通知栏 / 锁屏（含封面、时长、进度） */
+function reportPlayerState() {
+  if (!NATIVE) return;
+  var meta = curKey ? trackMeta(curKey) : null;
+  var playing = !!(media && !media.paused);
+  var payload = {
+    playing: playing,
+    title: npReportTitle(),
+    artist: (meta && meta.artist) || "",
+    album: (meta && meta.album) || "",
+    cover: npCoverURL(),
+    coverData: npCoverDataForReport(),
+    position: (media && isFinite(media.currentTime)) ? media.currentTime : 0,
+    duration: (media && isFinite(media.duration)) ? media.duration : 0
+  };
+  bridgeCall("playerState", payload).catch(function () {});
+}
+/** 播放中每 5 秒同步一次进度（锁屏上的进度条 / 时间） */
+function schedulePlayerStateTick() {
+  clearTimeout(playerStateTimer);
+  var playing = !!(media && !media.paused);
+  if (!playing || !NATIVE) return;
+  playerStateTimer = setTimeout(function () {
+    reportPlayerState();
+    schedulePlayerStateTick();
+  }, 5000);
+}
+/** 通知栏 / 锁屏 / 耳机按键 → 页面命令（原生 PlaybackService 调用） */
+window.__hbdPlayerCmd = function (cmd) {
+  try {
+    cmd = String(cmd || "");
+    if (cmd === "play") {
+      if (media) { if (media.paused) media.play().catch(function () {}); }
+      else togglePlayPause();
+    } else if (cmd === "pause") {
+      if (media) media.pause();
+    } else if (cmd === "toggle") {
+      togglePlayPause();
+    } else if (cmd === "next") {
+      if (!pl.length && !ensureQueue()) return;
+      if (pl.length) playIndex(plIndex + 1);
+    } else if (cmd === "prev") {
+      if (!pl.length && !ensureQueue()) return;
+      if (pl.length) playIndex(plIndex - 1);
+    } else if (cmd.indexOf("seek:") === 0) {
+      // 锁屏 / 通知栏进度条拖动：跳到指定秒数
+      var t = parseFloat(cmd.slice(5));
+      if (isFinite(t)) seekTo(t);
+    } else if (cmd === "stop") {
+      stop();
+    } else if (cmd === "state") {
+      reportPlayerState();
+    }
+  } catch (e) { /* 忽略 */ }
+};
 
 /* ================= 播放建立 / 停止 ================= */
 async function startTrack(id) {
@@ -310,8 +443,21 @@ async function beginPlayback(url, id, rate, ch) {
 }
 
 /* ---------- 杜比 / DTS 解码播放（内置 ffmpeg） ---------- */
+/** 正在解码的曲目（切歌后立刻显示「解码中」，避免看起来没反应） */
+var npBusyId = null, npBusyPct = 0;
+function updateNpBusy() {
+  var box = el("np-busy"), txt = el("np-busy-text");
+  if (!box || !txt) return;
+  if (!npBusyId) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  var name = itemNameOf(npBusyId) || trackNameOf(npBusyId) || "";
+  var ext = (extOf(name) || "").toUpperCase();
+  txt.textContent = "解码中" + (ext ? " " + ext : "") + (npBusyPct > 0 ? " " + npBusyPct + "%" : "…");
+}
 function setRowBusy(id, on) {
-  if (on) busyIds[id] = true; else delete busyIds[id];
+  if (on) { busyIds[id] = true; npBusyId = id; npBusyPct = 0; }
+  else { delete busyIds[id]; if (npBusyId === id) { npBusyId = null; npBusyPct = 0; } }
+  if (typeof updateNpBusy === "function") updateNpBusy();
   renderDetail();
   renderQueue();
 }
@@ -322,7 +468,11 @@ async function decodeSpecial(id, targetChannels, label) {
   var size = (registry.get(id) && registry.get(id).size) || 0;
   var info = await bridgeCall("decodeAudio", { id: id, name: name, size: size, channels: targetChannels },
     function (pct) {
-      if (decodingId === id) showToast("\uD83C\uDF00 " + label + " 解码中 " + pct + "%", 900);
+      if (decodingId === id) {
+        showToast("\uD83C\uDF00 " + label + " 解码中 " + pct + "%", 900);
+        npBusyPct = pct;                      // 播放界面上的「解码中」同步显示进度
+        updateNpBusy();
+      }
     });
   var url = decodedURL(info.key);
   // 以实际生成的 WAV 头为准（声道 / 采样率）
@@ -498,6 +648,9 @@ function playFromItems(plId, trackId) {
 
 /* ================= 进度与状态同步 ================= */
 function updateProgressUI() {
+  // 正在拖动进度条：以手指位置为准，别被播放进度刷回去
+  var seekEl = el("np-seek");
+  if (seekEl && seekEl.classList.contains("dragging")) return;
   var cur = 0, dur = 0;
   if (media && isFinite(media.duration) && media.duration > 0) {
     cur = media.currentTime;
@@ -528,6 +681,9 @@ function syncPlayState() {
   eqs.forEach(function (eq) { if (eq) eq.classList.toggle("stopped", !playing); });
   // 正在播放那一行的标题跑马灯（切歌 / 播放暂停都会走到这里）
   if (typeof rowMarqueeSync === "function") rowMarqueeSync();
+  updateNpBusy();
+  reportPlayerState();          // 通知栏 / 锁屏状态同步（原生）
+  schedulePlayerStateTick();
 }
 var tickRaf = 0;
 function tickLoop() {

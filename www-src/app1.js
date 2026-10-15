@@ -5,7 +5,7 @@
    ============================================================ */
 
 /* ================= 常量 ================= */
-var APP_VERSION = "2.30.0";   // 与 android/app/build.gradle.kts 的 versionName 保持一致
+var APP_VERSION = "2.31.1";   // 与 android/app/build.gradle.kts 的 versionName 保持一致
 var IMPORT_EXTS = new Set(["mp3","flac","wav","ogg","oga","opus","m4a","m4b","mp4","m4v","aac","wma","aif","aiff","ape","wv","ac3","eac3","dts","thd","truehd","mkv","mka","webm","mid","midi","amr"]);
 var FFMPEG_EXTS = new Set(["ac3","eac3","thd","truehd","dts","dtsma","dtshd","wma","wmav2","wmapro","aif","aiff","ape","wv","mka"]);
 var VIDEO_EXTS = new Set(["mp4","m4v","mkv","webm","mov","avi"]);

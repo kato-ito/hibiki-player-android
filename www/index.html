@@ -226,12 +226,17 @@ body[data-theme="white"].has-bg #bg-layer::after { background: #0d0d12; }
 }
 #mini-player.gone { transform: translateY(calc(100% + var(--mini-gap) + 6px)) scale(0.92); opacity: 0; pointer-events: none; }
 #mini-progress {
-  position: absolute; left: 8px; right: 8px; bottom: 5px; height: 2.5px;
-  cursor: pointer; border-radius: 2px; overflow: hidden;
+  /* 进度线本身只有 2.5px，手指点不中：整个盒子做成 18px 高的可点区域，线画在里面 */
+  position: absolute; left: 8px; right: 8px; bottom: 0; height: 18px;
+  cursor: pointer; background: transparent;
+  touch-action: none; user-select: none; -webkit-user-select: none;
 }
-#mini-progress .track { position: absolute; inset: 0; background: var(--track); }
+#mini-progress .track {
+  position: absolute; left: 0; right: 0; bottom: 5px; top: auto; height: 2.5px;
+  background: var(--track); border-radius: 2px;
+}
 #mini-progress .fill {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 0;
+  position: absolute; left: 0; bottom: 5px; top: auto; height: 2.5px; width: 0;
   background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 2px;
   transition: width .18s linear;
 }
@@ -652,20 +657,52 @@ body[data-theme="white"] .np-line.cur { color: #fc3c44; }
 #np-viz-axis { text-align: center; font-size: 12px; color: rgba(255,255,255,0.5); padding: 6px 0 2px; flex: none; }
 #np-viz-note { text-align: center; font-size: 12.5px; color: rgba(255,255,255,0.5); padding-bottom: 4px; flex: none; }
 /* 进度 */
-#np-progress { flex: none; padding: 10px 0 4px; }
+/* 切歌后需要内置解码（杜比 / DTS）时的提示：避免看起来「点了没反应」 */
+#np-busy {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 9px;
+  padding: 5px 12px 5px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.16); backdrop-filter: blur(14px);
+  font-size: 12.5px; font-weight: 600; color: rgba(255,255,255,0.9);
+  transition: opacity .2s, transform .2s var(--ios-ease);
+}
+#np-busy.hidden { display: none; }
+#np-busy .spin {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
+  animation: npSpin .8s linear infinite;
+}
+@keyframes npSpin { to { transform: rotate(360deg); } }
+#np-progress {
+  flex: none; padding: 10px 0 4px;
+  /* 整块「时间 + 进度条」都是可拖区域：进度线本身只有 4px，手指点不中 */
+  touch-action: none; -ms-touch-action: none;
+}
 #np-times { display: flex; justify-content: space-between; font-size: 12.5px; color: rgba(255,255,255,0.6); padding: 0 2px 6px; font-variant-numeric: tabular-nums; }
-.seek { position: relative; height: 30px; display: flex; align-items: center; cursor: pointer; }
-.seek .track { position: absolute; left: 0; right: 0; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.22); overflow: hidden; }
-.seek .fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 3px; }
+.seek {
+  --seek-line: 6px;                       /* 进度线粗细：填充与轨道同粗，别铺满整个可拖区域 */
+  position: relative; height: 30px; display: flex; align-items: center; cursor: pointer;
+  /* 触摸设备上必须自己接管手势，否则浏览器会把横向拖动判成滚动并发出 pointercancel，
+     表现就是「进度条划不动、只能点一下」 */
+  touch-action: none; -ms-touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.seek .track {
+  position: absolute; left: 0; right: 0; top: calc(50% - var(--seek-line) / 2);
+  height: var(--seek-line); border-radius: 3px; background: rgba(255,255,255,0.22); overflow: hidden;
+}
+.seek .fill {
+  position: absolute; left: 0; top: calc(50% - var(--seek-line) / 2);
+  height: var(--seek-line); background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 3px;
+}
 .seek .knob {
   position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #fff;
   box-shadow: 0 1px 6px rgba(0,0,0,0.5); opacity: 0; transition: opacity .15s;
   transform: translateX(-50%);
 }
 .seek:active .knob { opacity: 1; }
-/* 播放界面：细进度线 + 常显进度点（拖动时放大），不再是一条粗进度条 */
-#np-seek { height: 26px; }
-#np-seek .track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.26); }
+/* 播放界面：细进度线 + 常显进度点（拖动时放大），不再是一条粗进度条；
+   可拖区域保持 36px 高 —— 细线看得清，手指也点得中 */
+#np-seek { --seek-line: 4px; height: 36px; }
+#np-seek .track { border-radius: 2px; background: rgba(255,255,255,0.26); }
 #np-seek .fill { border-radius: 2px; }
 #np-seek .knob {
   opacity: 1; width: 12px; height: 12px;
@@ -1275,6 +1312,7 @@ body[data-theme="white"] .detail-empty .btn { color: #fff; }
         <div class="np-titles">
           <div id="np-title">未在播放</div>
           <div id="np-artist"></div>
+          <div id="np-busy" class="hidden"><span class="spin"></span><span id="np-busy-text">解码中…</span></div>
         </div>
         <button class="icon-btn" id="np-menu" aria-label="更多">
           <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
@@ -3736,7 +3774,7 @@ var qrcode = function() {
    ============================================================ */
 
 /* ================= 常量 ================= */
-var APP_VERSION = "2.30.0";   // 与 android/app/build.gradle.kts 的 versionName 保持一致
+var APP_VERSION = "2.31.1";   // 与 android/app/build.gradle.kts 的 versionName 保持一致
 var IMPORT_EXTS = new Set(["mp3","flac","wav","ogg","oga","opus","m4a","m4b","mp4","m4v","aac","wma","aif","aiff","ape","wv","ac3","eac3","dts","thd","truehd","mkv","mka","webm","mid","midi","amr"]);
 var FFMPEG_EXTS = new Set(["ac3","eac3","thd","truehd","dts","dtsma","dtshd","wma","wmav2","wmapro","aif","aiff","ape","wv","mka"]);
 var VIDEO_EXTS = new Set(["mp4","m4v","mkv","webm","mov","avi"]);
@@ -4735,10 +4773,25 @@ function seekBy(dt) {
   if (!media || !isFinite(media.duration)) return;
   seekTo(media.currentTime + dt);
 }
+/** 冷启动（后台被杀后重开）时队列是空的：用当前 / 第一个歌单重建，并沿用上次播放到的位置 */
+function ensureQueue() {
+  if (pl.length) return true;
+  var p = plById(curPlId) || (lib.length ? lib[0] : null);
+  if (!p || !p.items.length) return false;
+  curPlId = p.id;
+  pl = p.items.map(function (it) { return it.id; });
+  saveLib();
+  var idx = (typeof lastIdx === "number" && lastIdx >= 0) ? lastIdx : 0;
+  plIndex = Math.min(idx, pl.length - 1);
+  return true;
+}
 function togglePlayPause() {
   if (micOn) return;
   if (!media) {
-    if (pl.length) playIndex(plIndex);
+    // 没有音频对象（重开应用 / 还没播过）：先把队列恢复出来再播，
+    // 否则「直接点迷你条的播放键」会毫无反应
+    if (!pl.length && !ensureQueue()) { showToast("请先导入音频或新建歌单"); return; }
+    playIndex(plIndex);
     return;
   }
   if (media.paused) { media.play().catch(function () {}); }
@@ -4761,6 +4814,124 @@ function toggleMute() {
   muted = !muted;
   applyVolume();
 }
+
+/* ================= 原生播放服务（通知栏 / 锁屏控制 + 后台保活） ================= */
+var playerStateTimer = 0;
+/** 通知栏封面：走本地服务的 /cover/<id>（原生侧会带 UA 取图，裸流下载的封面也能显示） */
+function npCoverURL() {
+  if (!NATIVE || !curKey) return "";
+  var e = registry.get(curKey);
+  if (!e) return "";
+  return BOOT.base + "/cover/" + encodeURIComponent(curKey) + "?s=" + (e.size || 0);
+}
+/**
+ * 通知栏 / 锁屏封面之二：本地文件的内嵌封面只有页面读得到（且是几百 KB 的 data URL，
+ * 直接塞进 Intent 会撞 Binder 1MB 限制），这里先下采样到 512px 再直传原生。
+ * 每首歌只在第一次上报时带图，之后只带地址，避免每 5 秒重复传图。
+ * （/cover/<id> 这类「应用内存封面」交给原生自己取，见 npCoverURL）
+ */
+var npCoverBig = "", npCoverBigFor = "", npCoverBigTried = "", npCoverBigBusy = "", npCoverBigSent = "";
+function shrinkCover(src, cb) {
+  var img = new Image();
+  img.onload = function () {
+    try {
+      var S = 512, w = img.naturalWidth || S, h = img.naturalHeight || S;
+      var s = Math.min(S / w, S / h, 1);
+      var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+      var cv = document.createElement("canvas");
+      cv.width = cw; cv.height = ch;
+      cv.getContext("2d").drawImage(img, 0, 0, cw, ch);
+      cb(cv.toDataURL("image/jpeg", 0.82));
+    } catch (e) { cb(""); }
+  };
+  img.onerror = function () { cb(""); };
+  img.src = src;
+}
+function npCoverDataForReport() {
+  if (!NATIVE || !curKey) return "";
+  if (npCoverBigSent === curKey) return "";
+  var meta = trackMeta(curKey);
+  var src = meta && meta.cover;
+  if (!src) {
+    // 标签还没解析出来：先别标记成「已发送」，等元数据到了会再上报一次
+    if (meta && meta.loaded) npCoverBigSent = curKey;
+    return "";
+  }
+  if (src.indexOf("data:") !== 0) { npCoverBigSent = curKey; return ""; }  // 地址型封面由原生自取
+  if (npCoverBigFor === curKey && npCoverBig) { npCoverBigSent = curKey; return npCoverBig; }
+  if (npCoverBigBusy !== curKey && npCoverBigTried !== curKey) {
+    npCoverBigBusy = curKey;
+    var key = curKey;
+    shrinkCover(src, function (data) {
+      if (npCoverBigBusy === key) npCoverBigBusy = "";
+      npCoverBigTried = key;
+      if (data) { npCoverBig = data; npCoverBigFor = key; }
+      if (curKey === key) reportPlayerState();     // 图准备好了立刻补报，通知栏马上有封面
+    });
+  }
+  return "";
+}
+function npReportTitle() {
+  if (!curKey) return "";
+  var t = itemOf(curKey);
+  var meta = trackMeta(curKey);
+  return (meta && meta.title) || (t && t.name ? t.name.replace(/\.[^.]+$/, "") : "") || "";
+}
+/** 把播放状态推给原生：前台服务据此更新通知栏 / 锁屏（含封面、时长、进度） */
+function reportPlayerState() {
+  if (!NATIVE) return;
+  var meta = curKey ? trackMeta(curKey) : null;
+  var playing = !!(media && !media.paused);
+  var payload = {
+    playing: playing,
+    title: npReportTitle(),
+    artist: (meta && meta.artist) || "",
+    album: (meta && meta.album) || "",
+    cover: npCoverURL(),
+    coverData: npCoverDataForReport(),
+    position: (media && isFinite(media.currentTime)) ? media.currentTime : 0,
+    duration: (media && isFinite(media.duration)) ? media.duration : 0
+  };
+  bridgeCall("playerState", payload).catch(function () {});
+}
+/** 播放中每 5 秒同步一次进度（锁屏上的进度条 / 时间） */
+function schedulePlayerStateTick() {
+  clearTimeout(playerStateTimer);
+  var playing = !!(media && !media.paused);
+  if (!playing || !NATIVE) return;
+  playerStateTimer = setTimeout(function () {
+    reportPlayerState();
+    schedulePlayerStateTick();
+  }, 5000);
+}
+/** 通知栏 / 锁屏 / 耳机按键 → 页面命令（原生 PlaybackService 调用） */
+window.__hbdPlayerCmd = function (cmd) {
+  try {
+    cmd = String(cmd || "");
+    if (cmd === "play") {
+      if (media) { if (media.paused) media.play().catch(function () {}); }
+      else togglePlayPause();
+    } else if (cmd === "pause") {
+      if (media) media.pause();
+    } else if (cmd === "toggle") {
+      togglePlayPause();
+    } else if (cmd === "next") {
+      if (!pl.length && !ensureQueue()) return;
+      if (pl.length) playIndex(plIndex + 1);
+    } else if (cmd === "prev") {
+      if (!pl.length && !ensureQueue()) return;
+      if (pl.length) playIndex(plIndex - 1);
+    } else if (cmd.indexOf("seek:") === 0) {
+      // 锁屏 / 通知栏进度条拖动：跳到指定秒数
+      var t = parseFloat(cmd.slice(5));
+      if (isFinite(t)) seekTo(t);
+    } else if (cmd === "stop") {
+      stop();
+    } else if (cmd === "state") {
+      reportPlayerState();
+    }
+  } catch (e) { /* 忽略 */ }
+};
 
 /* ================= 播放建立 / 停止 ================= */
 async function startTrack(id) {
@@ -4842,8 +5013,21 @@ async function beginPlayback(url, id, rate, ch) {
 }
 
 /* ---------- 杜比 / DTS 解码播放（内置 ffmpeg） ---------- */
+/** 正在解码的曲目（切歌后立刻显示「解码中」，避免看起来没反应） */
+var npBusyId = null, npBusyPct = 0;
+function updateNpBusy() {
+  var box = el("np-busy"), txt = el("np-busy-text");
+  if (!box || !txt) return;
+  if (!npBusyId) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  var name = itemNameOf(npBusyId) || trackNameOf(npBusyId) || "";
+  var ext = (extOf(name) || "").toUpperCase();
+  txt.textContent = "解码中" + (ext ? " " + ext : "") + (npBusyPct > 0 ? " " + npBusyPct + "%" : "…");
+}
 function setRowBusy(id, on) {
-  if (on) busyIds[id] = true; else delete busyIds[id];
+  if (on) { busyIds[id] = true; npBusyId = id; npBusyPct = 0; }
+  else { delete busyIds[id]; if (npBusyId === id) { npBusyId = null; npBusyPct = 0; } }
+  if (typeof updateNpBusy === "function") updateNpBusy();
   renderDetail();
   renderQueue();
 }
@@ -4854,7 +5038,11 @@ async function decodeSpecial(id, targetChannels, label) {
   var size = (registry.get(id) && registry.get(id).size) || 0;
   var info = await bridgeCall("decodeAudio", { id: id, name: name, size: size, channels: targetChannels },
     function (pct) {
-      if (decodingId === id) showToast("\uD83C\uDF00 " + label + " 解码中 " + pct + "%", 900);
+      if (decodingId === id) {
+        showToast("\uD83C\uDF00 " + label + " 解码中 " + pct + "%", 900);
+        npBusyPct = pct;                      // 播放界面上的「解码中」同步显示进度
+        updateNpBusy();
+      }
     });
   var url = decodedURL(info.key);
   // 以实际生成的 WAV 头为准（声道 / 采样率）
@@ -5030,6 +5218,9 @@ function playFromItems(plId, trackId) {
 
 /* ================= 进度与状态同步 ================= */
 function updateProgressUI() {
+  // 正在拖动进度条：以手指位置为准，别被播放进度刷回去
+  var seekEl = el("np-seek");
+  if (seekEl && seekEl.classList.contains("dragging")) return;
   var cur = 0, dur = 0;
   if (media && isFinite(media.duration) && media.duration > 0) {
     cur = media.currentTime;
@@ -5060,6 +5251,9 @@ function syncPlayState() {
   eqs.forEach(function (eq) { if (eq) eq.classList.toggle("stopped", !playing); });
   // 正在播放那一行的标题跑马灯（切歌 / 播放暂停都会走到这里）
   if (typeof rowMarqueeSync === "function") rowMarqueeSync();
+  updateNpBusy();
+  reportPlayerState();          // 通知栏 / 锁屏状态同步（原生）
+  schedulePlayerStateTick();
 }
 var tickRaf = 0;
 function tickLoop() {
@@ -7229,6 +7423,8 @@ function applyNowMeta() {
     el("np-viz-note").textContent = "";
   renderNpLyrics();
   syncMediaSession();
+  if (typeof updateNpBusy === "function") updateNpBusy();
+  if (typeof reportPlayerState === "function") reportPlayerState();
 }
 /* 封面 Morph：从迷你条封面位置放大进入播放界面（Apple Music 的标志性转场） */
 function morphArtworkIn(fromRect) {
@@ -7739,44 +7935,170 @@ function pickLyrics() {
 
 /* ================= 事件接线 ================= */
 /**
- * 进度条拖动：拖动过程中只更新界面（平滑跟手），松手才真正 seek。
- * 原因：特殊格式（杜比 PCM WAV）每个 currentTime 都会触发新的 HTTP Range 请求，
- * 若逐帧 seek 会卡顿且看起来「拖不动」。
+ * 进度条拖动（播放界面 + 迷你条共用同一套）：界面始终跟手，拖动中按 ~200ms 节流真正跳转，
+ * 松手（或手势被系统打断）时落到最终位置。
+ *
+ * 真机上「划不动 / 拖不动」的四个坑，这里逐个堵上：
+ *   ① 横向拖动被浏览器判成滚动手势并补发 pointercancel —— 进度条自己接管手势
+ *      （CSS `touch-action: none`），拖动期间再拦一次 window 上的 touchmove；
+ *   ② 进度条只有几十像素高，手指一斜就滑出元素 —— 移动 / 抬手监听全部挂在 window 上
+ *      （不依赖 setPointerCapture：它抛异常或丢事件时，拖动不会跟着一起丢）；
+ *   ③ 老 WebView 只派发 touch 事件、没有 PointerEvent —— Pointer / Touch / Mouse
+ *      三套事件都接，谁先开始拖动谁负责到结束（同一时刻只允许一个拖动）；
+ *   ④ 特殊格式（杜比 PCM WAV）每个 currentTime 都会发一次 HTTP Range 请求 ——
+ *      拖动中节流跳转，既不卡顿，也不会「松手没反应」。
  */
-function makeSeekable(bar, fn) {
-  var seeking = false;
-  bar.addEventListener("pointerdown", function (e) {
-    seeking = true;
-    try { bar.setPointerCapture(e.pointerId); } catch (err) {}
-    fn(e, true);
-  });
-  bar.addEventListener("pointermove", function (e) { if (seeking) fn(e, true); });
-  var end = function (e) {
-    if (!seeking) return;
-    seeking = false;
-    if (e.type === "pointerup") fn(e, false);      // 取消手势不跳转
-    else el("np-seek").classList.remove("dragging");
-  };
-  bar.addEventListener("pointerup", end);
-  bar.addEventListener("pointercancel", end);
-}
-function seekFromEvent(e, previewOnly) {
+var seekDrag = null;              // 当前拖动状态（null = 没人在拖）
+var SEEK_LIVE_MS = 200;           // 拖动过程中真正跳转的节流间隔
+
+/** 把进度比例应用到界面（总是）与媒体（commit 时） */
+function applySeekFrac(frac, commit) {
   if (!media || !isFinite(media.duration) || media.duration <= 0) return;
-  var bar = e.currentTarget || el("np-seek");
-  var r = bar.getBoundingClientRect();
-  if (!r.width) return;
-  var frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+  frac = Math.min(1, Math.max(0, frac));
   var t = frac * media.duration;
-  if (previewOnly) {
-    el("np-seek-fill").style.width = (frac * 100) + "%";
-    el("np-seek-knob").style.left = (frac * 100) + "%";
-    el("np-cur").textContent = fmtTime(t);
-    el("np-seek").classList.add("dragging");
-    return;
-  }
+  el("np-seek-fill").style.width = (frac * 100) + "%";
+  el("np-seek-knob").style.left = (frac * 100) + "%";
+  el("mini-progress-fill").style.width = (frac * 100) + "%";
+  el("np-cur").textContent = fmtTime(t);
+  if (!commit) return;
+  try { media.currentTime = Math.min(media.duration - 0.05, Math.max(0, t)); }
+  catch (err) { /* 个别机型对不可 seek 的源会抛异常：界面照常，别把拖动搞挂 */ }
+  if (npOpen && lyricsOn) syncLyrics(media.currentTime);   // 暂停态拖动也要同步歌词高亮
+  reportPlayerState();                                     // 锁屏 / 通知栏的进度跟着走
+}
+
+/** 结束拖动：清掉 dragging 标记，并落到最终位置 */
+function endSeekDrag(cancelled) {
+  var d = seekDrag;
+  if (!d) return;
+  seekDrag = null;
+  if (d.timer) { clearTimeout(d.timer); d.timer = 0; }
+  try { d.unhook(); } catch (err) {}
   el("np-seek").classList.remove("dragging");
-  media.currentTime = t;
+  // 松手（含轻点一下）就一定落到手指位置；被系统打断时，手指已经走过的位置同样算数
+  if (!cancelled || d.moved) d.apply(d.frac, true);
   updateProgressUI();
+}
+
+/** 从事件里取出手指坐标（按事件族区分，确保是同一根手指） */
+function seekPoint(kind, id, ev) {
+  if (kind === "touch") {
+    var list = (ev.touches && ev.touches.length) ? ev.touches : ev.changedTouches;
+    if (!list || !list.length) return null;
+    var t = list[0];
+    for (var i = 0; i < list.length; i++) if (list[i].identifier === id) { t = list[i]; break; }
+    return { x: t.clientX, y: t.clientY, cancelable: ev.cancelable };
+  }
+  if (kind === "pointer" && ev.pointerId !== undefined && id !== undefined && ev.pointerId !== id) return null;
+  if (ev.clientX === undefined) return null;
+  return { x: ev.clientX, y: ev.clientY, cancelable: ev.cancelable };
+}
+
+/** 节流点到了：把「手指当前所在位置」真正写进播放器（手指停住不动也会落到这里） */
+function seekDragCommit() {
+  var d = seekDrag;
+  if (!d) return;
+  if (d.timer) { clearTimeout(d.timer); d.timer = 0; }
+  if (!d.pending) return;
+  d.pending = false;
+  d.lastSeek = Date.now();
+  d.apply(d.frac, true);
+}
+
+/** 拖动中：跟手 + 节流真跳转（拖到哪儿，声音就跟到哪儿） */
+function onSeekDragMove(p) {
+  var d = seekDrag;
+  if (!d) return;
+  if (!d.moved && (Math.abs(p.x - d.x0) > 2 || Math.abs(p.y - d.y0) > 2)) d.moved = true;
+  d.lastEvent = Date.now();
+  d.frac = d.w > 0 ? Math.min(1, Math.max(0, (p.x - d.l) / d.w)) : 0;
+  d.apply(d.frac, false);
+  d.pending = true;
+  var wait = SEEK_LIVE_MS - (d.lastEvent - d.lastSeek);
+  if (wait <= 0) seekDragCommit();
+  else if (!d.timer) d.timer = setTimeout(seekDragCommit, wait);
+}
+
+/**
+ * 开始拖动：移动 / 抬手 / 取消 全部挂到 window（捕获阶段），
+ * 手指滑出进度条、滑到屏幕边缘都不会丢事件。
+ */
+function startSeekDrag(measure, ev, kind, id, x, y) {
+  if (seekDrag && Date.now() - seekDrag.lastEvent > 1200) endSeekDrag(true);  // 上一次没收到收尾事件的兜底
+  if (seekDrag) return;
+  if (!media || !isFinite(media.duration) || media.duration <= 0) return;     // 时长为 0：拖了也没意义
+  var r = measure.getBoundingClientRect();
+  if (!r.width) return;
+  var d = {
+    kind: kind, id: id, apply: applySeekFrac, unhook: function () {},
+    l: r.left, w: r.width, x0: x, y0: y, frac: 0, moved: false,
+    lastSeek: Date.now(), lastEvent: Date.now(), pending: false, timer: 0
+  };
+  d.frac = Math.min(1, Math.max(0, (x - r.left) / r.width));
+  seekDrag = d;
+  el("np-seek").classList.add("dragging");
+  d.apply(d.frac, false);                       // 按下就把界面挪到手指位置（轻点即跳转）
+  // touchstart 的监听是 passive 的（不需要在这里拦默认行为，touch-action: none 已经接管）
+  if (ev.cancelable && ev.type !== "touchstart") { try { ev.preventDefault(); } catch (err) {} }
+  hookSeekDrag(d);
+}
+
+/** 把本次拖动要用的 window 监听挂上；结束时会由 d.unhook() 全部摘掉 */
+function hookSeekDrag(d) {
+  var kind = d.kind, id = d.id;
+  var opts = kind === "touch" ? { capture: true, passive: false } : { capture: true };
+  var move = function (e) {
+    var p = seekPoint(kind, id, e);
+    if (!p) return;
+    onSeekDragMove(p);
+    // 手指压在进度条上时，任何滚动 / 回弹都别发生
+    if (p.cancelable && kind === "touch") { try { e.preventDefault(); } catch (err) {} }
+  };
+  var up = function (e) {
+    if (kind === "pointer" && e.pointerId !== id) return;
+    endSeekDrag(false);
+  };
+  var cancel = function (e) {
+    if (kind === "pointer" && e.pointerId !== id) return;
+    endSeekDrag(true);
+  };
+  var lost = function () { endSeekDrag(true); };
+  var targets = null;
+  if (kind === "pointer") targets = [["pointermove", move], ["pointerup", up], ["pointercancel", cancel]];
+  else if (kind === "touch") targets = [["touchmove", move], ["touchend", up], ["touchcancel", cancel]];
+  else targets = [["mousemove", move], ["mouseup", up]];
+  targets.forEach(function (t) { window.addEventListener(t[0], t[1], opts); });
+  window.addEventListener("blur", lost);
+  document.addEventListener("visibilitychange", lost);
+  d.unhook = function () {
+    targets.forEach(function (t) { window.removeEventListener(t[0], t[1], opts); });
+    window.removeEventListener("blur", lost);
+    document.removeEventListener("visibilitychange", lost);
+  };
+}
+
+/**
+ * 让 hit 区域可以拖动进度：measure 用来把手指的 x 折算成时间
+ * （命中区域和可视进度条可以不是同一个元素，便于把可拖范围做大）。
+ */
+function makeSeekable(hit, measure) {
+  if (!hit || !measure) return;
+  hit.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startSeekDrag(measure, e, "pointer", e.pointerId, e.clientX, e.clientY);
+  });
+  // 没有 PointerEvent 的旧 WebView：退回触摸事件（有 PointerEvent 时 pointerdown 已经接管）
+  hit.addEventListener("touchstart", function (e) {
+    if (seekDrag) return;
+    var t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    startSeekDrag(measure, e, "touch", t.identifier, t.clientX, t.clientY);
+  }, { passive: true });
+  // 桌面浏览器 / 鼠标
+  hit.addEventListener("mousedown", function (e) {
+    if (seekDrag || e.button !== 0) return;
+    startSeekDrag(measure, e, "mouse", 0, e.clientX, e.clientY);
+  });
 }
 function armLongPress(node, fn) {
   var timer = 0, sx = 0, sy = 0;
@@ -8775,13 +9097,29 @@ function wireEvents() {
   /* 迷你条 */
   el("mini-art").addEventListener("click", function () { openNP(); });
   el("mini-text").addEventListener("click", function () { openNP(); });
-  el("mini-prev").addEventListener("click", function (e) { e.stopPropagation(); if (!micOn && pl.length) playIndex(plIndex - 1); });
+  el("mini-prev").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (micOn) return;
+    if (!pl.length && !ensureQueue()) return;
+    playIndex(plIndex - 1);
+  });
   el("mini-play").addEventListener("click", function (e) { e.stopPropagation(); togglePlayPause(); });
-  el("mini-next").addEventListener("click", function (e) { e.stopPropagation(); if (!micOn && pl.length) playIndex(plIndex + 1); });
-  makeSeekable(el("mini-progress"), seekFromEvent);
+  el("mini-next").addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (micOn) return;
+    if (!pl.length && !ensureQueue()) return;
+    playIndex(plIndex + 1);
+  });
+  makeSeekable(el("mini-progress"), el("mini-progress"));
+  // 拖动 / 点迷你进度条只做跳转，不要顺带打开播放界面
+  el("mini-progress").addEventListener("click", function (e) { e.stopPropagation(); });
 
   /* 正在播放 */
   el("np-close").addEventListener("click", closeNP);
+  // 点封面 = 收起播放界面（点歌词 / 可视化区域不会误触发）
+  el("np-art").addEventListener("click", function () {
+    if (npOpen) closeNP();
+  });
   el("np-menu").addEventListener("click", function () {
     openMenu("更多", [
       { label: "📃 载入歌词", fn: pickLyrics },
@@ -8828,7 +9166,8 @@ function wireEvents() {
   el("np-mute").addEventListener("click", toggleMute);
   el("np-vol").addEventListener("input", function () { setVolume(parseFloat(el("np-vol").value)); });
   el("np-queue-btn").addEventListener("click", openQueue);
-  makeSeekable(el("np-seek"), seekFromEvent);
+  // 命中区域用整块「时间 + 进度条」，可视进度线保持细线（手指不用瞄准那 4px 细线）
+  makeSeekable(el("np-progress"), el("np-seek"));
   document.querySelectorAll("#np-viz-tabs button[data-tab]").forEach(function (b) {
     b.addEventListener("click", function () {
       vizTab = b.dataset.tab;
@@ -8850,7 +9189,8 @@ function wireEvents() {
   /* NP 下拉关闭手势 */
   var gs = null;
   el("np-body").addEventListener("pointerdown", function (e) {
-    if (e.target.closest("button, input, .seek, .np-line, #np-viz-tabs, #np-lyrics")) return;
+    // #np-progress 整块是可拖区域（进度条 + 时间），别把它当成「下拉关闭面板」的手势起点
+    if (e.target.closest("button, input, .seek, .np-line, #np-progress, #np-viz-tabs, #np-lyrics")) return;
     gs = { y: e.clientY, dy: 0 };
   });
   window.addEventListener("pointermove", function (e) {

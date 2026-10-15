@@ -1,4 +1,4 @@
-﻿package com.zai.hibikiplayer
+package com.zai.hibikiplayer
 
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -39,6 +39,8 @@ class Bridge(
                 "biliQrPoll" -> activity.biliQrPoll(requestId, payload)
                 "biliLogout" -> activity.biliLogout(requestId)
                 "biliClipboard" -> activity.biliClipboard(requestId)
+                // 播放状态 → 前台服务（通知栏 / 锁屏控制、后台保活）
+                "playerState" -> activity.runOnUiThread { activity.playerState(requestId, payload) }
                 else -> activity.runOnUiThread { resolve(requestId, false, "unknown method: " + method) }
             }
         } catch (e: Exception) {
@@ -65,6 +67,14 @@ class Bridge(
                 "window.__hbdBiliLink && window.__hbdBiliLink(" + t + "," + s + ")",
                 null
             )
+        }
+    }
+
+    /** 通知栏 / 锁屏 / 耳机按键 → 页面（window.__hbdPlayerCmd('play'|'pause'|'toggle'|'next'|'prev'|'stop')） */
+    fun playerCmd(cmd: String) {
+        activity.runOnUiThread {
+            val c = JSONObject.quote(cmd)
+            webView.evaluateJavascript("window.__hbdPlayerCmd && window.__hbdPlayerCmd(" + c + ")", null)
         }
     }
 

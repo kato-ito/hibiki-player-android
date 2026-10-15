@@ -296,7 +296,7 @@ const ICON = '(() => { const pick = (sel) => { const el = document.querySelector
       vw: document.documentElement.clientWidth,
       mini: R("#mini-player"), art: R("#mini-art"), text: R("#mini-text"),
       prev: R("#mini-prev"), play: R("#mini-play"), next: R("#mini-next"),
-      prog: R("#mini-progress"), tabbar: R("#tabbar"),
+      prog: R("#mini-progress"), line: R("#mini-progress .track"), bar: R("#mini-progress .fill"), tabbar: R("#tabbar"),
     };
   });
   ok(miniGeo.art.r <= miniGeo.text.l + 1, "迷你条：封面与文字不重叠",
@@ -308,8 +308,11 @@ const ICON = '(() => { const pick = (sel) => { const el = document.querySelector
   const gap = miniGeo.tabbar.t - miniGeo.mini.b;
   ok(gap >= 4 && gap <= 16, "迷你条与标签栏之间留出间距", "gap=" + gap);
   ok(miniGeo.prog.w > miniGeo.vw * 0.8 && miniGeo.prog.w < miniGeo.vw, "进度线横跨卡片宽度", JSON.stringify(miniGeo.prog));
-  ok(miniGeo.prog.t > miniGeo.mini.t + miniGeo.mini.h * 0.7 && miniGeo.prog.b <= miniGeo.mini.b + 1,
-     "进度线位于卡片底部内侧", JSON.stringify({ prog: miniGeo.prog, mini: miniGeo.mini }));
+  // 进度线本身是 2.5px 细线，外面套了 18px 高的可点区域（真机上手指才点得中）
+  ok(miniGeo.line.h <= 4 && miniGeo.line.b <= miniGeo.mini.b + 1 && miniGeo.line.b > miniGeo.mini.t + miniGeo.mini.h * 0.7,
+     "进度线位于卡片底部内侧", JSON.stringify({ line: miniGeo.line, mini: miniGeo.mini }));
+  ok(miniGeo.prog.h >= 14 && miniGeo.prog.b <= miniGeo.mini.b + 1 && miniGeo.prog.w >= miniGeo.line.w,
+     "进度条有足够高的可点区域（便于手指拖动）", JSON.stringify({ prog: miniGeo.prog, line: miniGeo.line }));
 
   const rowGeo = await page.evaluate(() => {
     const li = document.querySelector("#detail-list li[data-id]");
